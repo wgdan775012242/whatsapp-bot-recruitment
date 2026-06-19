@@ -1,30 +1,29 @@
-const express = require('express');
-const app = express();
-app.use(express.json());
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+const genAI = new GoogleGenerativeAI(process.env.API_KEY); // يستخدم المفتاح الذي وضعته في Environment
 
-const VERIFY_TOKEN = "my_secret_token_123"; 
-const PORT = process.env.PORT || 3000;
+app.post('/webhook', async (req, res) => {
+  const incomingMessage = req.body.entry[0].changes[0].value.messages[0];
+  const userText = incomingMessage.text.body;
+  const senderId = incomingMessage.from;
 
-// صفحة ويب بسيطة ليقبلها فيسبوك في خانة "سياسة الخصوصية"
-app.get('/', (req, res) => {
-    res.send('<h1>Privacy Policy</h1><p>We respect your privacy and data security.</p>');
+  // إعداد نموذج Gemini
+  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+  // إرسال النص لـ Gemini
+  const result = await model.generateContent(`أنت مساعد ذكي متخصص في خدمات السفر والتوظيف بالسعودية. أجب على: ${userText}`);
+  const responseText = result.response.text();
+
+  // الآن نرسل الرد لواتساب (عن طريق API الخاص بـ Meta)
+  await axios({
+    method: 'POST',
+    url: `https://graph.facebook.com/v25.0/YOUR_PHONE_NUMBER_ID/messages`,
+    headers: { 'Authorization': `Bearer ${process.env.TOKEN}` },
+    data: {
+      messaging_product: "whatsapp",
+      to: senderId,
+      text: { body: responseText },
+    },
+  });
+
+  res.sendStatus(200);
 });
-
-// نقطة التحقق (Webhook) - هنا يتم ربط ميتا
-app.get('/webhook', (req, res) => {
-    let mode = req.query['hub.mode'];
-    let token = req.query['hub.verify_token'];
-    let challenge = req.query['hub.challenge'];
-    if (mode === 'subscribe' && token === VERIFY_TOKEN) {
-        res.status(200).send(challenge);
-    } else {
-        res.sendStatus(403);
-    }
-});
-
-app.post('/webhook', (req, res) => {
-    console.log("تم استلام إشعار:", JSON.stringify(req.body, null, 2));
-    res.status(200).send('EVENT_RECEIVED');
-});
-
-app.listen(PORT, () => console.log(`الخادم يعمل على المنفذ ${PORT}`));
