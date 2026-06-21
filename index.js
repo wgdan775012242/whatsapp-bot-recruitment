@@ -1,70 +1,68 @@
-const express = require('express');
-const axios = require('axios');
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+curl 'https://graph.facebook.com/<API_VERSION>/<WHATSAPP_BUSINESS_ACCOUNT_ID>/message_templates' \
+-H 'Content-Type: application/json' \
+-H 'Authorization: Bearer <ACCESS_TOKEN>' \
+-d '
+{
+  "name": "<TEMPLATE_NAME>",
+  "language": "<TEMPLATE_LANGUAGE>",
+  "category": "utility",
+  "parameter_format": "<PARAMETER_FORMAT>",
+  "components": [
 
-const app = express();
-app.use(express.json());
+    <!-- header component optional -->
+    {
+      "type": "header",
+      "format": "<HEADER_TYPE>",
+      "example": {
+        "header_handle": [
+          "<HEADER_HANDLE>"
+        ]
+      }
+    },
 
-const PORT = process.env.PORT || 3000;
-const VERIFY_TOKEN = "my_secret_token_123"; // نفس التوكن في فيسبوك
-const genAI = new GoogleGenerativeAI(process.env.API_KEY);
+    <!-- body component required -->
+    {
+      "type": "body",
+      "text": "<BODY_TEXT>",
 
-// صفحة تأكيد عمل الخادم
-app.get('/', (req, res) => {
-    res.send('<h1>Bot is running</h1>');
-});
+      <!-- example required if <BODY_TEXT> contains one or more parameters -->
+      "example": {
+        "body_text_named_params": [
+          {
+            "param_name": "<PARAMETER_NAME>",
+            "example": "<PARAMETER_EXAMPLE_VALUE>"
+          },
 
-// التحقق من Webhook
-app.get('/webhook', (req, res) => {
-    let mode = req.query['hub.mode'];
-    let token = req.query['hub.verify_token'];
-    let challenge = req.query['hub.challenge'];
-    if (mode === 'subscribe' && token === VERIFY_TOKEN) {
-        res.status(200).send(challenge);
-    } else {
-        res.sendStatus(403);
-    }
-});
+          <!-- additional parameters would follow, if using multiple parameters -->
+        ]
+      }
+    },
 
-// استقبال الرسائل والرد عبر Gemini
-app.post('/webhook', async (req, res) => {
-    try {
-        const entry = req.body.entry[0];
-        const changes = entry.changes[0];
-        const value = changes.value;
+    <!-- footer component optional -->
+    {
+      "type": "footer",
+      "text": "<FOOTER_TEXT>"
+    },
 
-        if (value.messages) {
-            const message = value.messages[0];
-            const senderId = message.from;
-            const userText = message.text.body;
-
-            // إعداد Gemini
-            const model = genAI.getGenerativeModel({ model: "gemini-pro" });
-
-            const prompt = `أنت مساعد ذكي متخصص في التوظيف والسفر للسعودية. أجب باختصار واحترافية على: ${userText}`;
-            
-            const result = await model.generateContent(prompt);
-            const aiResponse = result.response.text();
-
-            // إرسال الرد لواتساب
-            await axios({
-                method: 'POST',
-                url: `https://graph.facebook.com/v25.0/YOUR_PHONE_NUMBER_ID/messages`,
-                headers: { 'Authorization': `Bearer ${process.env.TOKEN}` },
-                data: {
-                    messaging_product: "whatsapp",
-                    to: senderId,
-                    text: { body: aiResponse },
-                },
-            });
+    <!-- button components optional -->
+    {
+      "type": "buttons",
+      "buttons": [
+        {
+          "type": "url",
+          "text": "<URL_BUTTON_LABEL_TEXT>",
+          "url": "<URL>"
+        },
+        {
+          "type": "phone_number",
+          "text": "<PHONE_BUTTON_LABEL_TEXT>",
+          "phone_number": "<PHONE_NUMBER>"
+        },
+        {
+          "type": "quick_reply",
+          "text": "<QUICK_REPLY_BUTTON_LABEL_TEXT>"
         }
-        res.sendStatus(200);
-    } catch (error) {
-        console.error("Error:", error);
-        res.sendStatus(500);
+      ]
     }
-});
-
-app.listen(PORT, () => {
-    console.log(`الخادم يعمل على المنفذ ${PORT}`);
-});
+  ]
+}'
