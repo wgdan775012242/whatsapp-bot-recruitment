@@ -1,11 +1,11 @@
-const express = require('express');
+const express = require('express'); // تم تصحيح Const إلى const
 const axios = require('axios');
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 const app = express();
 app.use(express.json());
 
-// جلب المتغيرات من منصة Render كما أضفتها في الصورة
+// جلب المتغيرات
 const PORT = process.env.PORT || 3000;
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN; 
 const GEMINI_API_KEY = process.env.API_KEY; 
@@ -14,6 +14,12 @@ const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 
 // تهيئة الذكاء الاصطناعي
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+
+// إعداد نموذج Gemini مع توجيهات النظام (الشخصية الأساسية للبوت)
+const model = genAI.getGenerativeModel({ 
+    model: "gemini-1.5-flash",
+    systemInstruction: 'أنت مساعد ذكي واحترافي يعمل لدى "أبو مجد الحداد لخدمات السفر والتوظيف". أجب باختصار، وبطريقة محترمة ومفيدة على استفسارات العملاء.'
+});
 
 // 1. صفحة فحص السيرفر
 app.get('/', (req, res) => {
@@ -47,24 +53,20 @@ app.post('/webhook', async (req, res) => {
             // التأكد من وجود رسالة جديدة
             if (value?.messages && value?.messages[0]) {
                 const message = value.messages[0];
-                const senderId = message.from; // رقم المرسل
+                const senderId = message.from; 
 
-                // معالجة الرسائل النصية فقط لتجنب الأخطاء
                 if (message.type === 'text') {
                     const userText = message.text.body;
                     console.log(`رسالة جديدة من ${senderId}: ${userText}`);
 
-                    // إعداد Gemini وتوجيهه ليرد باسم مكتبك
-                    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-                    const prompt = `أنت مساعد ذكي واحترافي يعمل لدى "أبو مجد الحداد لخدمات السفر والتوظيف". أجب باختصار، وبطريقة محترمة ومفيدة على هذا الاستفسار من العميل: ${userText}`;
-                    
-                    const result = await model.generateContent(prompt);
+                    // جلب الرد من Gemini (بدون الحاجة لكتابة الشخصية في كل مرة)
+                    const result = await model.generateContent(userText);
                     const aiResponse = result.response.text();
 
-                    // إرسال الرد للعميل عبر WhatsApp API
+                    // إرسال الرد للعميل عبر WhatsApp API (تم تعديل الإصدار إلى v20.0)
                     await axios({
                         method: 'POST',
-                        url: `https://graph.facebook.com/v25.0/${PHONE_NUMBER_ID}/messages`,
+                        url: `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`,
                         headers: { 
                             'Authorization': `Bearer ${WHATSAPP_TOKEN}`,
                             'Content-Type': 'application/json'
@@ -82,7 +84,6 @@ app.post('/webhook', async (req, res) => {
                 }
             }
         }
-        // إرسال 200 لواتساب ليتمكن من معرفة أن الرسالة وصلتنا
         res.sendStatus(200);
     } catch (error) {
         console.error("حدث خطأ أثناء معالجة الرسالة:", error?.response?.data || error.message);
@@ -90,7 +91,6 @@ app.post('/webhook', async (req, res) => {
     }
 });
 
-// تشغيل السيرفر
 app.listen(PORT, () => {
     console.log(`الخادم يعمل الآن ومستعد لاستقبال الرسائل على المنفذ ${PORT}`);
 });
